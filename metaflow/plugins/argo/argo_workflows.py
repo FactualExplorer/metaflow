@@ -460,6 +460,8 @@ class ArgoWorkflows(object):
         if schedule:
             # Remove the field "Year" if it exists
             schedule = schedule[0]
+            if schedule.schedule is None:
+                return None, None
             return " ".join(schedule.schedule.split()[:5]), schedule.timezone
         return None, None
 
@@ -482,7 +484,8 @@ class ArgoWorkflows(object):
 
     def trigger_explanation(self):
         # Trigger explanation for cron workflows
-        if self.flow._flow_decorators.get("schedule"):
+        schedule = self.flow._flow_decorators.get("schedule")
+        if schedule and schedule[0].schedule is not None:
             return (
                 "This workflow triggers automatically via the CronWorkflow *%s*."
                 % self.name
@@ -562,7 +565,12 @@ class ArgoWorkflows(object):
 
     def _process_parameters(self):
         parameters = {}
-        has_schedule = self.flow._flow_decorators.get("schedule") is not None
+        schedule_decorators = self.flow._flow_decorators.get("schedule")
+        if schedule_decorators:
+            schedule = schedule_decorators[0]
+            has_schedule = schedule.schedule is not None
+        else:
+            has_schedule = False
         seen = set()
         for var, param in self.flow._get_parameters():
             # Throw an exception if the parameter is specified twice.
