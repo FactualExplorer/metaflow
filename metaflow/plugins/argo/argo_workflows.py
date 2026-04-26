@@ -468,9 +468,13 @@ class ArgoWorkflows(object):
     def schedule(self):
         try:
             argo_client = ArgoClient(namespace=KUBERNETES_NAMESPACE)
-            argo_client.schedule_workflow_template(
-                self.name, self._schedule, self._timezone
-            )
+            # If schedule is None, delete any existing CronWorkflow instead of creating a suspended one
+            if self._schedule is None:
+                argo_client.delete_cronworkflow(self.name)
+            else:
+                argo_client.schedule_workflow_template(
+                    self.name, self._schedule, self._timezone
+                )
             # Register sensor.
             # Metaflow will overwrite any existing sensor.
             sensor_name = ArgoWorkflows._sensor_name(self.name)
