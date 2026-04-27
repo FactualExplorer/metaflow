@@ -461,6 +461,9 @@ class ArgoWorkflows(object):
             # Remove the field "Year" if it exists
             schedule = schedule[0]
             if schedule.schedule is None:
+                # @schedule decorator is present but all scheduling flags are
+                # falsy (e.g. @schedule(daily=False)). Treat this the same as
+                # no decorator — do not create a CronWorkflow.
                 return None, None
             return " ".join(schedule.schedule.split()[:5]), schedule.timezone
         return None, None
@@ -468,13 +471,9 @@ class ArgoWorkflows(object):
     def schedule(self):
         try:
             argo_client = ArgoClient(namespace=KUBERNETES_NAMESPACE)
-            # If schedule is None, delete any existing CronWorkflow instead of creating a suspended one
-            if self._schedule is None:
-                argo_client.delete_cronworkflow(self.name)
-            else:
-                argo_client.schedule_workflow_template(
-                    self.name, self._schedule, self._timezone
-                )
+            argo_client.schedule_workflow_template(
+                self.name, self._schedule, self._timezone
+            )
             # Register sensor.
             # Metaflow will overwrite any existing sensor.
             sensor_name = ArgoWorkflows._sensor_name(self.name)
@@ -488,8 +487,7 @@ class ArgoWorkflows(object):
 
     def trigger_explanation(self):
         # Trigger explanation for cron workflows
-        schedule = self.flow._flow_decorators.get("schedule")
-        if schedule and schedule[0].schedule is not None:
+        if self._schedule is not None:
             return (
                 "This workflow triggers automatically via the CronWorkflow *%s*."
                 % self.name
@@ -569,12 +567,7 @@ class ArgoWorkflows(object):
 
     def _process_parameters(self):
         parameters = {}
-        schedule_decorators = self.flow._flow_decorators.get("schedule")
-        if schedule_decorators:
-            schedule = schedule_decorators[0]
-            has_schedule = schedule.schedule is not None
-        else:
-            has_schedule = False
+        has_schedule = self.flow._flow_decorators.get("schedule") is not None
         seen = set()
         for var, param in self.flow._get_parameters():
             # Throw an exception if the parameter is specified twice.
